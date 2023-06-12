@@ -1,0 +1,82 @@
+library(readxl)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(vegan)
+library(tidyverse)
+library(ggforce)
+library(plyr)
+library("ggVennDiagram")
+
+# first 167 SNP
+SNP167<-read_excel("C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/HW_JUNE(2023)/BZ167_Master_June(2023).xlsx", sheet="SNP167_merged", col_names=TRUE,.name_repair="minimal")
+str(SNP167)
+head(SNP167)
+
+view(SNP167)
+
+Merging_df<-as.data.frame(SNP167)
+
+Merging_df
+
+df<-as.data.frame(lapply(split.default(Merging_df, names(Merging_df)), function(x) Reduce(`+`, x)))
+
+head(df)
+
+write.csv(df, "SNP167_merged.csv")
+
+SNP167_merged<-read_excel("C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/HW_JUNE(2023)/BZ167_Master_June(2023).xlsx", sheet="SNP167_merged")
+
+data_long<- gather(SNP167_merged, SNP, Abundance, 2:3, factor_key=TRUE)
+data_long
+
+tail(data_long)
+
+ggplot(data_long, aes(x = Samples, fill = SNP, y = Abundance)) + geom_bar(position="fill", stat = "identity") + theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, size = 8, colour = "black", vjust = 0.5, hjust = 1, face= "bold"), 
+        axis.title.y = element_text(size = 8, face = "bold"), legend.title = element_text(size = 8, face = "bold"), 
+        legend.text = element_text(size = 8, face = "bold", colour = "black"), 
+        axis.text.y = element_text(colour = "black", size = 8, face = "bold")) +
+  labs(x = "", y = "Relative Abundance (%)", fill = "SNP") +
+  theme(
+        legend.box = "horizontal",
+        legend.title = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        legend.position="bottom") 
+
+# first 134 SNP
+SNP134<-read_excel("C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/HW_JUNE(2023)/BZ167_Master_June(2023).xlsx", sheet="BZ134", col_names=TRUE,.name_repair="minimal")
+str(SNP134)
+head(SNP134)
+
+view(SNP134)
+
+Merging_df<-as.data.frame(SNP134)
+
+Merging_df
+
+df<-as.data.frame(lapply(split.default(Merging_df, names(Merging_df)), function(x) Reduce(`+`, x)))
+
+head(df)
+
+write.csv(df, "SNP167_merged.csv")
+
+SNP134_merged<-read_excel("C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/HW_JUNE(2023)/BZ167_Master_June(2023).xlsx", sheet="SNP134_merged")
+
+data_long<- gather(SNP134_merged, SNP, Abundance, 2:3, factor_key=TRUE)
+data_long
+
+tail(data_long)
+
+ggplot(data_long, aes(x = Samples, fill = SNP, y = Abundance)) + geom_bar(position="fill", stat = "identity") +  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, size = 8, colour = "black", vjust = 0.5, hjust = 1, face= "bold"), 
+        axis.title.y = element_text(size = 8, face = "bold"), legend.title = element_text(size = 8, face = "bold"), 
+        legend.text = element_text(size = 8, face = "bold", colour = "black"), 
+        axis.text.y = element_text(colour = "black", size = 8, face = "bold")) +
+  labs(x = "", y = "Relative Abundance (%)", fill = "SNP") +
+  theme(
+        legend.box = "horizontal",
+        legend.title = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        legend.position="bottom") 
+

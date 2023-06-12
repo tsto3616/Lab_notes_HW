@@ -1,0 +1,514 @@
+library(dada2)
+library(DECIPHER)
+packageVersion("DECIPHER")
+library(ShortRead)
+packageVersion("ShortRead") 
+library(Biostrings)
+packageVersion("Biostrings")
+library(ggplot2)
+packageVersion("ggplot2")
+library(stringr) # not strictly required but handy
+packageVersion("stringr")
+library(readr)
+packageVersion("readr")
+library("openxlsx")
+library(dplyr)
+library(tidyverse)
+library(janitor)
+set.seed(106)
+
+################################################################################
+# first we do the ITS2
+################################################################################
+path <- "C:/Users/tsto3616/Documents/Sequences_June(2023)"
+
+fnFs <- sort(list.files(path, pattern = "R1", full.names = TRUE)) 
+fnRs <- sort(list.files(path, pattern = "R2", full.names = TRUE))
+
+head(fnRs)
+tail(fnRs)
+
+samples = str_extract(basename(fnFs), "^[^_]+")
+
+names(fnFs) <- samples
+names(fnRs) <- samples
+
+head(fnFs)
+
+# NEMA1 Primers
+FWD <- "ACGTCTGGTTCAGGGTTGTT"
+REV <- "TTAGTTTCTTTTCCTCCGCT"
+fwd_primer_rev <- as.character(reverseComplement(DNAStringSet(FWD)))
+rev_primer_rev <- as.character(reverseComplement(DNAStringSet(REV)))
+
+cutadapt <- path.expand("C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/cutadapt.exe")
+
+# Make sure it works
+system2(cutadapt, args = "--version")
+# version 4.0
+
+# Create an output directory to store the clipped files
+cut_dir <- file.path(path, "cutadapt")
+if (!dir.exists(cut_dir)) dir.create(cut_dir)
+
+fwd_cut <- file.path(cut_dir, basename(fnFs))
+rev_cut <- file.path(cut_dir, basename(fnRs))
+
+names(fwd_cut) <- samples
+names(rev_cut) <- samples
+
+# It's good practice to keep some log files so let's create some
+# file names that we can use for those 
+cut_logs <- path.expand(file.path(cut_dir, paste0(samples, ".log")))
+
+cutadapt_args1 <- c("-g", FWD, "-a", rev_primer_rev, 
+                   "-G", REV, "-A", fwd_primer_rev,
+                   "-n", 2, "--discard-untrimmed")
+                   
+for (i in seq_along(fnFs)) {
+  system2(cutadapt, 
+          args = c(cutadapt_args1,
+                   "-o", fwd_cut[i], "-p", rev_cut[i], 
+                   fnFs[i], fnRs[i]),
+          stdout = cut_logs[i])  }
+
+# quick check that we got something
+head(list.files(cut_dir))
+tail(list.files(cut_dir))
+
+dir(path="C:/Sequences_June(2023)/cutadapt")
+
+ShortRead::readFastq(fwd_cut[1:2])
+
+plotQualityProfile(fwd_cut[1:2])
+
+plotQualityProfile(rev_cut[3:4])
+
+filt_dir <- file.path(path, "filtered")
+if (!dir.exists(filt_dir)) dir.create(filt_dir)
+
+fwd_filt <- file.path(filt_dir, basename(fnFs))
+rev_filt <- file.path(filt_dir, basename(fnRs))
+
+names(fwd_filt) <- samples
+names(rev_filt) <- samples
+
+filtered_out <- filterAndTrim(
+  fwd = fwd_cut, 
+  filt = fwd_filt,
+  rev = rev_cut,
+  filt.rev = rev_filt,
+  maxEE = c(2, 5), 
+  truncQ = 2, 
+  rm.phix = TRUE, 
+  compress = TRUE, 
+  multithread = FALSE, truncLen=c(200,200),
+  minLen=20 #default
+  )  
+head(filtered_out)
+
+errF <- learnErrors(fwd_filt, multithread=FALSE)
+
+errR <- learnErrors(rev_filt, multithread=FALSE)
+
+plotErrors(errF, nominalQ=TRUE)
+
+dada_fwd <- dada(fwd_filt, err = err_fwd, multithread = FALSE)
+dada_rev <- dada(rev_filt, err = err_rev, multithread = FALSE)
+
+mergers <- mergePairs(
+  dadaF = dada_fwd,
+  dadaR = dada_rev,
+  derepF = fwd_filt,
+  derepR = rev_filt,
+  maxMismatch = 1, 
+  verbose=TRUE)
+
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+
+# Inspect distribution of sequence lengths
+table(nchar(getSequences(seqtab)))
+
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=FALSE, verbose=TRUE)
+dim(seqtab.nochim)
+
+head(seqtab.nochim)
+
+sum(seqtab.nochim)/sum(seqtab)
+# 0.
+
+#couldnt get it working so just have to ignore
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim2))
+# If processing a single sample, remove the sapply calls: e.g. replace sapply(dadaFs, getN) with getN(dadaFs)
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- samples
+head(track)
+
+write.csv(track, file="track_ITS2_June_2023.csv")
+
+TSeqTab <- as.data.frame(t(seqtab.nochim))
+TSeqTab$variant<-1:nrow(TSeqTab)
+
+write.csv(TSeqTab, file = "HW_ITS2_June(2023).csv")
+
+Species_ITS2 <-assignSpecies(seqtab.nochim, "C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/Hookworms/HW_ITS2_as_ref.txt", allowMultiple=TRUE)
+
+write.csv(Species_ITS2, "HW_ITS2_species_June(2023).csv")
+
+Tseqtab<- read.csv("HW_ITS2_June(2023).csv")
+Species_ITS2<- read.csv("HW_ITS2_species_June(2023).csv")
+
+ITS2_Species_merged <-full_join(Species_ITS2, Tseqtab, by="Sequences")
+
+head(ITS2_Species_merged)
+
+data2<-adorn_percentages(ITS2_Species_merged, denominator="col", na.rm=TRUE)
+
+view(data2)
+
+data2[data2 <= 0.0005] <- 0
+
+pc<-adorn_percentages(data2, denominator="col", na.rm=TRUE)
+
+View(pc)
+
+write.csv(pc, file="0.05%_cut_off_ITS2_June(2023).csv")
+
+########## now to merge the species 
+library(readxl)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(vegan)
+library(tidyverse)
+library(ggforce)
+library(plyr)
+
+merging_ITS2<-read_excel("C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/HW_June(2023)/0.05%_cut_off_ITS2_June(2023).xlsx", col_names=TRUE, .name_repair="minimal", sheet="merging")
+str(merging_ITS2)
+head(merging_ITS2)
+
+Merging_df<-as.data.frame(merging_ITS2)
+
+Merging_df
+
+df<-as.data.frame(lapply(split.default(Merging_df, names(Merging_df)), function(x) Reduce(`+`, x)))
+
+head(df)
+
+write.csv(df, "merged_ITS2_June(2023).csv")
+
+################################################################################
+# Now we do the SNP167
+################################################################################
+path <- "C:/Users/tsto3616/Documents/Sequences_June(2023)"
+
+fnFs <- sort(list.files(path, pattern = "R1", full.names = TRUE)) 
+fnRs <- sort(list.files(path, pattern = "R2", full.names = TRUE))
+
+head(fnRs)
+tail(fnRs)
+
+samples = str_extract(basename(fnFs), "^[^_]+")
+
+names(fnFs) <- samples
+names(fnRs) <- samples
+
+head(fnFs)
+
+# 167 Primers
+FWD <- "GGYGCAGGAAACAACTG"
+REV <- "CTTTGGTGAGGGGACAACA"
+fwd_primer_rev <- as.character(reverseComplement(DNAStringSet(FWD)))
+rev_primer_rev <- as.character(reverseComplement(DNAStringSet(REV)))
+
+cutadapt <- path.expand("C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/cutadapt.exe")
+
+# Make sure it works
+system2(cutadapt, args = "--version")
+# version 4.0
+
+# Create an output directory to store the clipped files
+cut_dir <- file.path(path, "cutadapt")
+if (!dir.exists(cut_dir)) dir.create(cut_dir)
+
+fwd_cut <- file.path(cut_dir, basename(fnFs))
+rev_cut <- file.path(cut_dir, basename(fnRs))
+
+names(fwd_cut) <- samples
+names(rev_cut) <- samples
+
+# It's good practice to keep some log files so let's create some
+# file names that we can use for those 
+cut_logs <- path.expand(file.path(cut_dir, paste0(samples, ".log")))
+
+cutadapt_args1 <- c("-g", FWD, "-a", rev_primer_rev, 
+                   "-G", REV, "-A", fwd_primer_rev,
+                   "-n", 2, "--discard-untrimmed")
+                   
+for (i in seq_along(fnFs)) {
+  system2(cutadapt, 
+          args = c(cutadapt_args1,
+                   "-o", fwd_cut[i], "-p", rev_cut[i], 
+                   fnFs[i], fnRs[i]),
+          stdout = cut_logs[i])  }
+
+# quick check that we got something
+head(list.files(cut_dir))
+tail(list.files(cut_dir))
+
+ShortRead::readFastq(fwd_cut[1:2])
+
+plotQualityProfile(fwd_cut[1:2])
+
+plotQualityProfile(rev_cut[1:2])
+
+filt_dir <- file.path(path, "filtered")
+if (!dir.exists(filt_dir)) dir.create(filt_dir)
+
+fwd_filt <- file.path(filt_dir, basename(fnFs))
+rev_filt <- file.path(filt_dir, basename(fnRs))
+
+names(fwd_filt) <- samples
+names(rev_filt) <- samples
+
+filtered_out <- filterAndTrim(
+  fwd = fwd_cut, 
+  filt = fwd_filt,
+  rev = rev_cut,
+  filt.rev = rev_filt,
+  maxEE = c(2, 5), 
+  truncQ = 2, 
+  rm.phix = TRUE, 
+  compress = TRUE, 
+  multithread = FALSE, truncLen=c(200,200),
+  minLen=20 #default
+  )  
+head(filtered_out)
+
+# need to remove the empty files so use this code! Otherwise learnErrors doesnt work
+not.lost <- file.exists(fwd_filt) 
+# alternatively, not.lost <- out[,"reads.out"] > 0
+fwd_filt <- fwd_filt[not.lost]
+
+not.lost <- file.exists(rev_filt) 
+# alternatively, not.lost <- out[,"reads.out"] > 0
+rev_filt <- rev_filt[not.lost]
+
+errF <- learnErrors(fwd_filt, multithread=FALSE)
+
+errR <- learnErrors(rev_filt, multithread=FALSE)
+
+plotErrors(errF, nominalQ=TRUE)
+
+dada_fwd <- dada(fwd_filt, err = err_fwd, multithread = FALSE)
+dada_rev <- dada(rev_filt, err = err_rev, multithread = FALSE)
+
+mergers <- mergePairs(
+  dadaF = dada_fwd,
+  dadaR = dada_rev,
+  derepF = fwd_filt,
+  derepR = rev_filt,
+  maxMismatch = 1, 
+  verbose=TRUE)
+
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+
+# Inspect distribution of sequence lengths
+table(nchar(getSequences(seqtab)))
+
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=FALSE, verbose=TRUE)
+dim(seqtab.nochim)
+
+head(seqtab.nochim)
+
+sum(seqtab.nochim)/sum(seqtab)
+# 0.9704 retained 
+
+#couldnt get it working so just have to ignore
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim))
+# If processing a single sample, remove the sapply calls: e.g. replace sapply(dadaFs, getN) with getN(dadaFs)
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- samples
+head(track)
+
+write.csv(track, file="track_BZ167_June_2023.csv")
+
+TSeqTab <- as.data.frame(t(seqtab.nochim))
+TSeqTab$variant<-1:nrow(TSeqTab)
+
+write.csv(TSeqTab, file = "HW_BZ167_June(2023).csv")
+
+BZ167 <-assignSpecies(seqtab.nochim, "C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/Hookworms/HW_167_as_ref.txt", allowMultiple=TRUE)
+
+write.csv(BZ167, "HW_BZ167_Species_June(2023).csv")
+
+Tseqtab<- read.csv("HW_BZ167_June(2023).csv")
+Species_167<- read.csv("HW_BZ167_Species_June(2023).csv")
+
+Species_merged_167 <-full_join(Species_167, Tseqtab, by="Sequences")
+
+head(Species_merged_167)
+
+write.csv(Species_merged_167, file="BZ167_master_June(2023).csv")
+
+################################################################################
+# Now we do the SNP200
+################################################################################
+path <- "C:/Users/tsto3616/Documents/Sequences_June(2023)"
+
+fnFs <- sort(list.files(path, pattern = "R1", full.names = TRUE)) 
+fnRs <- sort(list.files(path, pattern = "R2", full.names = TRUE))
+
+head(fnRs)
+tail(fnRs)
+
+samples = str_extract(basename(fnFs), "^[^_]+")
+
+names(fnFs) <- samples
+names(fnRs) <- samples
+
+head(fnFs)
+
+# 200 Primers
+FWD <- "GTRGTGGAGCCATACAATGC"
+REV <- "GGCATGAAGAAGTGAAGACGT"
+fwd_primer_rev <- as.character(reverseComplement(DNAStringSet(FWD)))
+rev_primer_rev <- as.character(reverseComplement(DNAStringSet(REV)))
+
+cutadapt <- path.expand("C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/cutadapt.exe")
+
+# Make sure it works
+system2(cutadapt, args = "--version")
+# version 4.0
+
+# Create an output directory to store the clipped files
+cut_dir <- file.path(path, "cutadapt")
+if (!dir.exists(cut_dir)) dir.create(cut_dir)
+
+fwd_cut <- file.path(cut_dir, basename(fnFs))
+rev_cut <- file.path(cut_dir, basename(fnRs))
+
+names(fwd_cut) <- samples
+names(rev_cut) <- samples
+
+# It's good practice to keep some log files so let's create some
+# file names that we can use for those 
+cut_logs <- path.expand(file.path(cut_dir, paste0(samples, ".log")))
+
+cutadapt_args1 <- c("-g", FWD, "-a", rev_primer_rev, 
+                   "-G", REV, "-A", fwd_primer_rev,
+                   "-n", 2, "--discard-untrimmed")
+                   
+for (i in seq_along(fnFs)) {
+  system2(cutadapt, 
+          args = c(cutadapt_args1,
+                   "-o", fwd_cut[i], "-p", rev_cut[i], 
+                   fnFs[i], fnRs[i]),
+          stdout = cut_logs[i])  }
+
+# quick check that we got something
+head(list.files(cut_dir))
+tail(list.files(cut_dir))
+
+ShortRead::readFastq(fwd_cut[1:2])
+
+plotQualityProfile(fwd_cut[1:2])
+
+plotQualityProfile(rev_cut[1:2])
+
+filt_dir <- file.path(path, "filtered")
+if (!dir.exists(filt_dir)) dir.create(filt_dir)
+
+fwd_filt <- file.path(filt_dir, basename(fnFs))
+rev_filt <- file.path(filt_dir, basename(fnRs))
+
+names(fwd_filt) <- samples
+names(rev_filt) <- samples
+
+filtered_out <- filterAndTrim(
+  fwd = fwd_cut, 
+  filt = fwd_filt,
+  rev = rev_cut,
+  filt.rev = rev_filt,
+  maxEE = c(2, 5), 
+  truncQ = 2, 
+  rm.phix = TRUE, 
+  compress = TRUE, 
+  multithread = FALSE, truncLen=c(200,200),
+  minLen=20 #default
+  )  
+head(filtered_out)
+
+# need to remove the empty files so use this code! Otherwise learnErrors doesnt work
+not.lost <- file.exists(fwd_filt) 
+# alternatively, not.lost <- out[,"reads.out"] > 0
+fwd_filt <- fwd_filt[not.lost]
+
+not.lost <- file.exists(rev_filt) 
+# alternatively, not.lost <- out[,"reads.out"] > 0
+rev_filt <- rev_filt[not.lost]
+
+errF <- learnErrors(fwd_filt, multithread=FALSE)
+
+errR <- learnErrors(rev_filt, multithread=FALSE)
+
+plotErrors(errF, nominalQ=TRUE)
+
+dada_fwd <- dada(fwd_filt, err = err_fwd, multithread = FALSE)
+dada_rev <- dada(rev_filt, err = err_rev, multithread = FALSE)
+
+mergers <- mergePairs(
+  dadaF = dada_fwd,
+  dadaR = dada_rev,
+  derepF = fwd_filt,
+  derepR = rev_filt,
+  maxMismatch = 1, 
+  verbose=TRUE)
+
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+
+# Inspect distribution of sequence lengths
+table(nchar(getSequences(seqtab)))
+
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=FALSE, verbose=TRUE)
+dim(seqtab.nochim)
+
+head(seqtab.nochim)
+
+sum(seqtab.nochim)/sum(seqtab)
+# 0.958 retained 
+
+#couldnt get it working so just have to ignore
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim))
+# If processing a single sample, remove the sapply calls: e.g. replace sapply(dadaFs, getN) with getN(dadaFs)
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- samples
+head(track)
+
+write.csv(track, file="track_BZ167_June_2023.csv")
+
+TSeqTab <- as.data.frame(t(seqtab.nochim))
+TSeqTab$variant<-1:nrow(TSeqTab)
+
+write.csv(TSeqTab, file = "HW_BZ200_June(2023).csv")
+
+BZ200 <-assignSpecies(seqtab.nochim, "C:/Users/tsto3616/OneDrive - The University of Sydney (Staff)/Desktop/Hookworms/HW_200_as_ref.txt", allowMultiple=TRUE)
+
+write.csv(BZ200, "HW_BZ200_Species_June(2023).csv")
+
+Tseqtab<- read.csv("HW_BZ200_June(2023).csv")
+Species_200<- read.csv("HW_BZ200_Species_June(2023).csv")
+
+Species_merged_200 <-full_join(Species_200, Tseqtab, by="Sequences")
+
+head(Species_merged_200)
+
+write.csv(Species_merged_200, file="BZ200_master_June(2023).csv")
+

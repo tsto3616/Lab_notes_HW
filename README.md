@@ -5,4 +5,4 @@ Our 3 dogs (TS001-TS003) are all greyhounds, 2 from camden and one from Dubbo.
 
 QLD samples sent of for NGS sequencing (results analysed in June). QLD samples renamed as TS.1-TS.13- see one drive for the sample details under the sample file. 
 
-Used faecal DNA kit for isolation of DNA from eggs for the TS001-TS003 samples. 
+Used isolate II faecal DNA kit for isolation of DNA from eggs for the TS001-TS003 samples. 

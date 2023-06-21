@@ -12,6 +12,8 @@ For the speadsheets if there is "Ancylostoma" in genus column and "Junk" in the 
 
 On the 9th of June checked Winston 9405 (TS004) and Toby 9302 (TS005). A few days later did Aurora 9407 (TS006) and Cleo 9007 (TS007) both had hookworms. Non hookworm samples that were checked were Shaxx 5978, George 9019, Destiny 9016, Roachie 5633. Basil 9388 was checked as well but was negative for hookworms. 
 
-On the 14th of june processed Ian's TS008-TS013 eggs by centrifuging with force, then removing as much ethanol with a pipette then evaporating off the ethanol. On the 16th of June i isolated DNA from samples TS008-TS0012 where it awaits PCR reactions. Might do more FECs too. 
+On the 14th of june processed Ian's TS008-TS014 eggs by centrifuging with force, then removing as much ethanol with a pipette then evaporating off the ethanol. On the 16th of June i isolated DNA from samples TS008-TS0012 where it awaits PCR reactions. Might do more FECs too. 19th isolated DNA from the rest. 
 
 Also chipping away at the nemabiome project bit by bit. Will update at a later day. For the nemabiome emily assigned species. 
+
+Amplified ITS2 from TS001-TS014 on the 21/06/2023. TS001-TS007 amplified, TS008-TS014 did not, QLD10 did not either
